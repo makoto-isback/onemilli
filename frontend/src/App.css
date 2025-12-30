@@ -1,0 +1,6 @@
+.app {
+  padding-bottom: 80px; /* Space for navigation */
+  min-height: 100vh;
+  background: #ffffff;
+  color: #000000;
+}
