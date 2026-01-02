@@ -2,6 +2,6 @@
 command = "npm install && npx prisma generate && npm run build"
 
 [deploy]
-startCommand = "npx prisma migrate deploy && npm run start:prod"
+startCommand = "npm run start:prod"
 healthcheckPath = "/api/lottery/round"
 healthcheckTimeout = 100
