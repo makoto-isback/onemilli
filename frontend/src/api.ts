@@ -1,24 +1,43 @@
+import axios from 'axios'
 import { telegramService } from './telegram';
 
-export const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api';
+const RAW_BASE_URL = (import.meta as any).env?.VITE_API_URL
 
-// Helper function to handle API responses and auth errors
-async function handleResponse(response: Response) {
-  if (response.status === 401) {
-    // Token expired or invalid, clear it
-    localStorage.removeItem('auth_token');
-    // Redirect to auth or reload
-    window.location.reload();
-    throw new Error('Authentication failed');
-  }
-
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
-  }
-
-  return response;
+if (!RAW_BASE_URL) {
+  throw new Error('VITE_API_URL is not defined')
 }
+
+export const API_BASE_URL = RAW_BASE_URL.endsWith('/api')
+  ? RAW_BASE_URL
+  : `${RAW_BASE_URL}/api`
+
+export const api = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true,
+})
+
+// Request interceptor to add auth token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('auth_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Response interceptor to handle auth errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid, clear it
+      localStorage.removeItem('auth_token');
+      // Redirect to auth or reload
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
 
 export interface AuthResponse {
   success: boolean;
@@ -69,117 +88,51 @@ export class ApiService {
       throw new Error('No Telegram init data available');
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/telegram`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        initData,
-      }),
+    const response = await api.post<AuthResponse>('/auth/telegram', {
+      initData,
     });
 
-    await handleResponse(response);
-    const data = await response.json();
-
-    if (data.success && data.token) {
-      localStorage.setItem('auth_token', data.token);
-      return data.token;
+    if (response.data.success && response.data.token) {
+      localStorage.setItem('auth_token', response.data.token);
+      return response.data.token;
     }
 
     throw new Error('Authentication failed');
   }
 
   static async getBalance(): Promise<number> {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${API_BASE_URL}/wallet/balance`, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
-    });
-    await handleResponse(response);
-    const data = await response.json();
-    return data.balance;
+    const response = await api.get<BalanceResponse>('/wallet/balance');
+    return response.data.balance;
   }
 
   static async getActiveRound(): Promise<RoundData> {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${API_BASE_URL}/lottery/round`, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
-    });
-    await handleResponse(response);
-    return await response.json();
+    const response = await api.get<RoundData>('/lottery/round');
+    return response.data;
   }
 
   static async placeBet(amount: number): Promise<BetResponse> {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${API_BASE_URL}/lottery/bet`, {
-      method: 'POST',
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ amount }),
-    });
-    await handleResponse(response);
-    return await response.json();
+    const response = await api.post<BetResponse>('/lottery/bet', { amount });
+    return response.data;
   }
 
   static async getTransactions(): Promise<Transaction[]> {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${API_BASE_URL}/wallet/transactions`, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
-    });
-    await handleResponse(response);
-    const data = await response.json();
-    return data.transactions;
+    const response = await api.get<{ transactions: Transaction[] }>('/wallet/transactions');
+    return response.data.transactions;
   }
 
   static async requestDeposit(amount: number): Promise<{ success: boolean; message: string }> {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${API_BASE_URL}/wallet/deposit`, {
-      method: 'POST',
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ amount }),
-    });
-    await handleResponse(response);
-    return await response.json();
+    const response = await api.post('/wallet/deposit', { amount });
+    return response.data;
   }
 
   static async requestWithdraw(amount: number): Promise<{ success: boolean; message: string }> {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${API_BASE_URL}/wallet/withdraw`, {
-      method: 'POST',
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ amount }),
-    });
-    await handleResponse(response);
-    return await response.json();
+    const response = await api.post('/wallet/withdraw', { amount });
+    return response.data;
   }
 
   static async getRoundHistory() {
-    const token = localStorage.getItem('auth_token');
-    const response = await fetch(`${API_BASE_URL}/lottery/history`, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json',
-      },
-    });
-    await handleResponse(response);
-    return await response.json();
+    const response = await api.get('/lottery/history');
+    return response.data;
   }
 
   static logout() {
