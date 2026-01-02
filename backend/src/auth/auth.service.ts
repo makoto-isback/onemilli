@@ -19,6 +19,8 @@ export interface TelegramAuthData {
 
 @Injectable()
 export class AuthService {
+  private rawInitData: string;
+
   constructor(
     private jwtService: JwtService,
     private prisma: PrismaService,
@@ -26,6 +28,12 @@ export class AuthService {
 
   async validateTelegramAuth(initData: string): Promise<string> {
     try {
+      this.rawInitData = initData; // Store raw initData for verification
+
+      // TEMP DEBUG - REMOVE AFTER FIXING
+      console.log('Telegram initData:', initData);
+      console.log('BOT TOKEN EXISTS:', !!process.env.TELEGRAM_BOT_TOKEN);
+
       const authData = this.parseInitData(initData);
       this.verifyTelegramHash(authData);
 
@@ -85,21 +93,28 @@ export class AuthService {
       throw new Error('TELEGRAM_BOT_TOKEN not configured');
     }
 
-    // Create data string for hash verification
-    const dataString = Object.keys(authData)
-      .filter(key => key !== 'hash')
+    // Use official Telegram verification method
+    const params = new URLSearchParams(this.rawInitData);
+    const hash = params.get('hash');
+    params.delete('hash');
+
+    const dataCheckString = [...params.entries()]
       .sort()
-      .map(key => `${key}=${typeof authData[key] === 'object' ? JSON.stringify(authData[key]) : authData[key]}`)
+      .map(([k, v]) => `${k}=${v}`)
       .join('\n');
 
-    // Create secret key from bot token
-    const secretKey = crypto.createHash('sha256').update(botToken).digest();
+    const secretKey = crypto
+      .createHash('sha256')
+      .update(botToken)
+      .digest();
 
-    // Create HMAC hash
-    const hash = crypto.createHmac('sha256', secretKey).update(dataString).digest('hex');
+    const computedHash = crypto
+      .createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
 
-    if (hash !== authData.hash) {
-      throw new UnauthorizedException('Invalid hash');
+    if (computedHash !== hash) {
+      throw new UnauthorizedException('Invalid Telegram signature');
     }
   }
 }
