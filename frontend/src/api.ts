@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { telegramService } from './telegram';
 
 const RAW_BASE_URL = (import.meta as any).env?.VITE_API_URL
 
@@ -94,13 +93,22 @@ export class ApiService {
       throw new Error('Authentication already attempted');
     }
     this.authAttempted = true;
-    const initData = telegramService.getInitData();
+
+    // Use ONLY window.Telegram.WebApp.initData - raw string, no modification
+    const initData = window.Telegram?.WebApp?.initData;
     if (!initData) {
+      console.error('❌ No Telegram initData available');
       throw new Error('No Telegram init data available');
     }
 
+    // Log for debugging (as requested)
+    console.log('🔐 TELEGRAM INITDATA DEBUG:');
+    console.log('  initData type:', typeof initData);
+    console.log('  initData length:', initData.length);
+    console.log('  initData preview:', initData.substring(0, 50) + '...');
+
     const response = await api.post<AuthResponse>('/auth/telegram', {
-      initData,
+      initData,  // Send raw initData string directly
     });
 
     if (response.data.success && response.data.token) {

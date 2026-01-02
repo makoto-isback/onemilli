@@ -61,17 +61,8 @@ export class TelegramService {
   }
 
   getInitData(): string {
-    if (this.webApp) {
-      return this.webApp.initData;
-    }
-
-    // Fallback for development - try to get from URL params
-    try {
-      const urlParams = new URLSearchParams(window.location.hash.substring(1));
-      return urlParams.get('tgWebAppData') || '';
-    } catch {
-      return '';
-    }
+    // Use ONLY window.Telegram.WebApp.initData - no fallbacks
+    return window.Telegram?.WebApp?.initData || '';
   }
 
   getUser(): TelegramUser | null {
