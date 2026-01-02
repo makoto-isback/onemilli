@@ -6,7 +6,6 @@ import Wallet from './pages/Wallet';
 import History from './pages/History';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [balance, setBalance] = useState(0);
 
@@ -16,25 +15,38 @@ function App() {
 
   const initializeApp = async () => {
     try {
+      // Initialize Telegram WebApp (non-blocking)
+      const tg = window.Telegram?.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      } else {
+        console.warn('Telegram WebApp not detected - running in browser mode');
+      }
+
       // Check if already authenticated
       if (ApiService.isAuthenticated()) {
-        setIsAuthenticated(true);
         // Load initial balance
-        const userBalance = await ApiService.getBalance();
-        setBalance(userBalance);
+        try {
+          const userBalance = await ApiService.getBalance();
+          setBalance(userBalance);
+        } catch (error) {
+          console.warn('Failed to load balance:', error);
+        }
       } else {
-        // Try to authenticate with Telegram
-        await ApiService.authenticate();
-        setIsAuthenticated(true);
-        const userBalance = await ApiService.getBalance();
-        setBalance(userBalance);
+        // Try to authenticate with Telegram (don't block if it fails)
+        try {
+          await ApiService.authenticate();
+          const userBalance = await ApiService.getBalance();
+          setBalance(userBalance);
+        } catch (error) {
+          console.error('Authentication failed:', error);
+          console.warn('Running in demo mode - authentication failed');
+        }
       }
     } catch (error) {
-      console.error('Authentication failed:', error);
-      // In development, allow access without auth
-      if ((import.meta as any).env?.DEV) {
-        setIsAuthenticated(true);
-      }
+      console.error('App initialization error:', error);
+      // Allow app to continue even if initialization fails
     } finally {
       setIsLoading(false);
     }
@@ -54,15 +66,8 @@ function App() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 max-w-md mx-auto relative">
-        <div className="w-full bg-[#FAF3E1] bold-outline rounded-3xl p-8 text-center bold-shadow mb-4">
-          <div className="text-lg font-bold">Please open this app through Telegram</div>
-        </div>
-      </div>
-    );
-  }
+  // App renders regardless of authentication status
+  // Telegram WebApp is initialized in initializeApp()
 
   return (
     <Router>
