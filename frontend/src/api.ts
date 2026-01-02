@@ -11,6 +11,10 @@ export const API_BASE_URL = RAW_BASE_URL.endsWith('/api')
   ? RAW_BASE_URL
   : `${RAW_BASE_URL}/api`
 
+console.log('🔍 FRONTEND API DEBUG:');
+console.log('  RAW_BASE_URL:', RAW_BASE_URL);
+console.log('  API_BASE_URL:', API_BASE_URL);
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
@@ -22,6 +26,7 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  console.log('🚀 API REQUEST:', config.method?.toUpperCase(), config.url);
   return config;
 });
 

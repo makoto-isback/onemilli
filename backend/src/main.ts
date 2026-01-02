@@ -29,8 +29,21 @@ async function bootstrap() {
     // Enable graceful shutdown
     app.enableShutdownHooks();
 
+    // Log all registered routes
+    const server = app.getHttpAdapter().getInstance();
+    const router = server._router;
+    if (router && router.stack) {
+      logger.log('📋 REGISTERED ROUTES:');
+      router.stack.forEach((layer: any) => {
+        if (layer.route) {
+          const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
+          logger.log(`  ${methods} ${layer.route.path}`);
+        }
+      });
+    }
+
     const port = process.env.PORT || 3000;
-    await app.listen(port);
+    await app.listen(port, '0.0.0.0');
 
     logger.log(`🚀 Application is running on: ${await app.getUrl()}`);
     logger.log(`📊 Health check available at: ${await app.getUrl()}/api/health`);
