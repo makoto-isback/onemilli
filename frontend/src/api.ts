@@ -101,14 +101,14 @@ export class ApiService {
       throw new Error('No Telegram init data available');
     }
 
-    // Log for debugging (as requested)
-    console.log('🔐 TELEGRAM INITDATA DEBUG:');
-    console.log('  initData type:', typeof initData);
-    console.log('  initData length:', initData.length);
-    console.log('  initData preview:', initData.substring(0, 50) + '...');
+    // Log raw initData for exact backend comparison
+    console.log('🔐 TELEGRAM INITDATA - RAW STRING TO SEND:');
+    console.log('Full initData:', initData);
+    console.log('initData type:', typeof initData);
+    console.log('initData length:', initData.length);
 
     const response = await api.post<AuthResponse>('/auth/telegram', {
-      initData,  // Send raw initData string directly
+      initData,  // Send raw initData string directly - NO MODIFICATION
     });
 
     if (response.data.success && response.data.token) {
