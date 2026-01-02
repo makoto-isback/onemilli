@@ -123,27 +123,44 @@ export class AuthService {
   }
 
   private verifyTelegramInitData(initData: string, botToken: string): boolean {
+    // Parse initData using URLSearchParams
     const params = new URLSearchParams(initData);
     const hash = params.get('hash');
-    if (!hash) return false;
+    if (!hash) {
+      this.logger.error('❌ NO_HASH_FIELD: Missing hash field in initData');
+      return false;
+    }
 
+    // Remove hash field
     params.delete('hash');
 
+    // Sort remaining keys alphabetically and build key=value pairs joined with \n
     const dataCheckString = Array.from(params.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
       .join('\n');
 
+    this.logger.log('🔍 DATA_CHECK_STRING_LENGTH: ' + dataCheckString.length);
+
+    // Derive secret key as sha256(botToken)
     const secretKey = crypto
       .createHash('sha256')
       .update(botToken)
       .digest();
 
+    // Compute HMAC-SHA256 of dataCheckString
     const calculatedHash = crypto
       .createHmac('sha256', secretKey)
       .update(dataCheckString)
       .digest('hex');
 
+    // DEBUG ONLY - Log hashes for troubleshooting
+    this.logger.log('🔐 HASH_COMPARISON:');
+    this.logger.log('  Received hash: ' + hash);
+    this.logger.log('  Calculated hash: ' + calculatedHash);
+    this.logger.log('  Match: ' + (calculatedHash === hash));
+
+    // Compare with provided hash
     return calculatedHash === hash;
   }
 }
