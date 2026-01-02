@@ -82,7 +82,13 @@ export interface Transaction {
 }
 
 export class ApiService {
+  private static authAttempted = false;
+
   static async authenticate(): Promise<string> {
+    if (this.authAttempted) {
+      throw new Error('Authentication already attempted');
+    }
+    this.authAttempted = true;
     const initData = telegramService.getInitData();
     if (!initData) {
       throw new Error('No Telegram init data available');

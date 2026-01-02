@@ -11,95 +11,85 @@ export interface TelegramUser {
   language_code?: string;
 }
 
-export interface TelegramAuthData {
-  user: TelegramUser;
-  auth_date: number;
-  hash: string;
-}
-
 @Injectable()
 export class AuthService {
-  private rawInitData: string;
-
   constructor(
     private jwtService: JwtService,
     private prisma: PrismaService,
   ) {}
 
   async validateTelegramAuth(initData: string): Promise<string> {
-    try {
-      this.rawInitData = initData; // Store raw initData for verification
-
-      // TEMP DEBUG - REMOVE AFTER FIXING
-      console.log('Telegram initData:', initData);
-      console.log('BOT TOKEN EXISTS:', !!process.env.TELEGRAM_BOT_TOKEN);
-
-      const authData = this.parseInitData(initData);
-      this.verifyTelegramHash(authData);
-
-      // Check if auth_date is not too old (within 24 hours)
-      const now = Math.floor(Date.now() / 1000);
-      if (now - authData.auth_date > 86400) {
-        throw new UnauthorizedException('Authentication data is too old');
-      }
-
-      // Create or update user
-      const user = await this.prisma.user.upsert({
-        where: { telegramId: authData.user.id.toString() },
-        update: {
-          username: authData.user.username,
-        },
-        create: {
-          telegramId: authData.user.id.toString(),
-          username: authData.user.username,
-        },
-      });
-
-      // Ensure user has a KYAT balance record
-      await this.prisma.kyatBalance.upsert({
-        where: { userId: user.id },
-        update: {},
-        create: { userId: user.id, balance: 0 },
-      });
-
-      // Generate JWT token
-      const payload = { userId: user.id, telegramId: user.telegramId };
-      return this.jwtService.sign(payload);
-    } catch (error) {
-      throw new UnauthorizedException('Invalid Telegram authentication');
-    }
-  }
-
-  private parseInitData(initData: string): TelegramAuthData {
-    const params = new URLSearchParams(initData);
-    const authData: any = {};
-
-    for (const [key, value] of params.entries()) {
-      if (key === 'user') {
-        authData.user = JSON.parse(value);
-      } else if (key === 'auth_date') {
-        authData.auth_date = parseInt(value);
-      } else {
-        authData[key] = value;
-      }
+    if (!initData) {
+      throw new UnauthorizedException('Missing initData');
     }
 
-    return authData as TelegramAuthData;
-  }
-
-  private verifyTelegramHash(authData: TelegramAuthData): void {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     if (!botToken) {
-      throw new Error('TELEGRAM_BOT_TOKEN not configured');
+      console.error('TELEGRAM_BOT_TOKEN missing');
+      throw new UnauthorizedException('Server misconfigured');
     }
 
-    // Use official Telegram verification method
-    const params = new URLSearchParams(this.rawInitData);
+    // TEMP DEBUG - REMOVE AFTER FIXING
+    console.log('Telegram initData:', initData);
+    console.log('BOT TOKEN EXISTS:', !!botToken);
+
+    const valid = this.verifyTelegramInitData(initData, botToken);
+    if (!valid) {
+      throw new UnauthorizedException('Invalid Telegram signature');
+    }
+
+    // Parse user data
+    const params = new URLSearchParams(initData);
+    const userData = params.get('user');
+    if (!userData) {
+      throw new UnauthorizedException('Missing user data');
+    }
+
+    const user = JSON.parse(userData);
+
+    // Check if auth_date is not too old (within 24 hours)
+    const authDate = params.get('auth_date');
+    if (authDate) {
+      const now = Math.floor(Date.now() / 1000);
+      const authTimestamp = parseInt(authDate);
+      if (now - authTimestamp > 86400) {
+        throw new UnauthorizedException('Authentication data is too old');
+      }
+    }
+
+    // Create or update user
+    const dbUser = await this.prisma.user.upsert({
+      where: { telegramId: user.id.toString() },
+      update: {
+        username: user.username,
+      },
+      create: {
+        telegramId: user.id.toString(),
+        username: user.username,
+      },
+    });
+
+    // Ensure user has a KYAT balance record
+    await this.prisma.kyatBalance.upsert({
+      where: { userId: dbUser.id },
+      update: {},
+      create: { userId: dbUser.id, balance: 0 },
+    });
+
+    // Generate JWT token
+    const payload = { userId: dbUser.id, telegramId: dbUser.telegramId };
+    return this.jwtService.sign(payload);
+  }
+
+  private verifyTelegramInitData(initData: string, botToken: string): boolean {
+    const params = new URLSearchParams(initData);
     const hash = params.get('hash');
+    if (!hash) return false;
+
     params.delete('hash');
 
-    const dataCheckString = [...params.entries()]
-      .sort()
+    const dataCheckString = Array.from(params.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
       .join('\n');
 
@@ -108,13 +98,11 @@ export class AuthService {
       .update(botToken)
       .digest();
 
-    const computedHash = crypto
+    const calculatedHash = crypto
       .createHmac('sha256', secretKey)
       .update(dataCheckString)
       .digest('hex');
 
-    if (computedHash !== hash) {
-      throw new UnauthorizedException('Invalid Telegram signature');
-    }
+    return calculatedHash === hash;
   }
 }

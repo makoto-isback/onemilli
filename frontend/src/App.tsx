@@ -8,6 +8,7 @@ import History from './pages/History';
 function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [balance, setBalance] = useState(0);
+  const [authAttempted, setAuthAttempted] = useState(false);
 
   useEffect(() => {
     initializeApp();
@@ -15,11 +16,12 @@ function App() {
 
   const initializeApp = async () => {
     try {
-      // Initialize Telegram WebApp (non-blocking)
+      // Initialize Telegram WebApp and wait for ready
       const tg = window.Telegram?.WebApp;
       if (tg) {
         tg.ready();
         tg.expand();
+        console.log('Telegram WebApp ready');
       } else {
         console.warn('Telegram WebApp not detected - running in browser mode');
       }
@@ -33,8 +35,9 @@ function App() {
         } catch (error) {
           console.warn('Failed to load balance:', error);
         }
-      } else {
-        // Try to authenticate with Telegram (don't block if it fails)
+      } else if (!authAttempted) {
+        // Try to authenticate with Telegram only once after WebApp is ready
+        setAuthAttempted(true);
         try {
           await ApiService.authenticate();
           const userBalance = await ApiService.getBalance();
