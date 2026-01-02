@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,26 +8,22 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  telegramId  String   @unique
-  username    String?
-  createdAt   DateTime @default(now())
-
-  // Relations
-  kyatBalance KyatBalance?
-  transactions Transaction[]
+  id           String        @id @default(cuid())
+  telegramId   String        @unique
+  username     String?
+  createdAt    DateTime      @default(now())
   bets         Bet[]
-  wonRounds    Round[]   @relation("RoundWinner")
+  kyatBalance  KyatBalance?
+  wonRounds    Round[]       @relation("RoundWinner")
+  transactions Transaction[]
 
   @@map("users")
 }
 
 model KyatBalance {
-  userId   String @id
-  balance  Int    @default(0) // Store in smallest unit (e.g., 100 = 1.00 KYAT)
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId  String @id
+  balance Int    @default(0)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("kyat_balances")
 }
@@ -39,27 +32,23 @@ model Transaction {
   id        String   @id @default(cuid())
   userId    String
   type      String
-  amount    Int // Positive for credits, negative for debits
+  amount    Int
   createdAt DateTime @default(now())
   note      String?
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("transactions")
 }
 
 model Round {
-  id           String   @id @default(cuid())
-  status       String   @default("ACTIVE")
-  totalPool    Int      @default(0)
+  id           String    @id @default(cuid())
+  status       String    @default("ACTIVE")
+  totalPool    Int       @default(0)
   winnerUserId String?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
   endedAt      DateTime?
-
-  // Relations
-  bets   Bet[]
-  winner User? @relation("RoundWinner", fields: [winnerUserId], references: [id])
+  bets         Bet[]
+  winner       User?     @relation("RoundWinner", fields: [winnerUserId], references: [id])
 
   @@map("rounds")
 }
@@ -70,11 +59,8 @@ model Bet {
   roundId   String
   amount    Int
   createdAt DateTime @default(now())
-
-  // Relations
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  round     Round    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("bets")
 }
-
