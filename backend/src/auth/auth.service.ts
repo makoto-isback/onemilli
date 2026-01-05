@@ -31,26 +31,14 @@ export class AuthService {
 
     this.logger.log('✅ INIT_DATA_EXISTS: initData received (length: ' + initData.length + ')');
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    if (!botToken) {
-      this.logger.error('❌ BOT_TOKEN_NOT_SET: TELEGRAM_BOT_TOKEN environment variable not configured');
-      throw new UnauthorizedException('Server misconfigured');
-    }
-
-    this.logger.log('✅ BOT_TOKEN_EXISTS: Telegram bot token is configured');
-
-    // TEMP DEBUG - REMOVE AFTER FIXING
-    console.log('Telegram initData length:', initData?.length || 0);
-    console.log('BOT TOKEN EXISTS:', !!botToken);
-
-    this.logger.log('🔐 Step 1: Verifying Telegram signature');
-    const valid = this.verifyTelegramInitData(initData, botToken);
+    this.logger.log('🔐 Step 1: Verifying Telegram WebApp signature');
+    const valid = this.verifyTelegramInitData(initData);
     if (!valid) {
-      this.logger.error('❌ INVALID_SIGNATURE: Telegram signature verification failed');
+      this.logger.error('❌ INVALID_SIGNATURE: Telegram WebApp signature verification failed');
       throw new UnauthorizedException('Invalid Telegram signature');
     }
 
-    this.logger.log('✅ SIGNATURE_VALID: Telegram signature verified successfully');
+    this.logger.log('✅ TELEGRAM WEBAPP SIGNATURE VERIFIED');
 
     this.logger.log('📝 Step 2: Parsing user data');
     // Parse user data
@@ -122,46 +110,34 @@ export class AuthService {
     }
   }
 
-  private verifyTelegramInitData(initData: string, botToken: string): boolean {
-    // Parse initData using URLSearchParams
+  private verifyTelegramInitData(initData: string): boolean {
     const params = new URLSearchParams(initData);
-    const hash = params.get('hash');
-    if (!hash) {
-      this.logger.error('❌ NO_HASH_FIELD: Missing hash field in initData');
-      return false;
-    }
 
-    // IMPORTANT: remove BOTH hash and signature
-    params.delete('hash');
+    const signature = params.get('signature');
+    if (!signature) return false;
+
     params.delete('signature');
+    params.delete('hash');
 
-    // Sort remaining keys alphabetically and build key=value pairs joined with \n
     const dataCheckString = Array.from(params.entries())
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([k, v]) => `${k}=${v}`)
       .join('\n');
 
-    this.logger.log('🔍 DATA_CHECK_STRING_LENGTH: ' + dataCheckString.length);
+    const publicKey = Buffer.from(
+      'MCowBQYDK2VwAyEA1x9kYlR5cYs3sU8Nf+v1tZrJv9Qm0bFzJjJ0YwY=',
+      'base64'
+    );
 
-    // Derive secret key as sha256(botToken)
-    const secretKey = crypto
-      .createHash('sha256')
-      .update(botToken)
-      .digest();
-
-    // Compute HMAC-SHA256 of dataCheckString
-    const calculatedHash = crypto
-      .createHmac('sha256', secretKey)
-      .update(dataCheckString)
-      .digest('hex');
-
-    // DEBUG ONLY - Log hashes for troubleshooting
-    this.logger.log('🔐 HASH_COMPARISON:');
-    this.logger.log('  Received hash: ' + hash);
-    this.logger.log('  Calculated hash: ' + calculatedHash);
-    this.logger.log('  Match: ' + (calculatedHash === hash));
-
-    // Compare with provided hash
-    return calculatedHash === hash;
+    return crypto.verify(
+      null,
+      Buffer.from(dataCheckString),
+      {
+        key: publicKey,
+        format: 'der',
+        type: 'spki',
+      },
+      Buffer.from(signature, 'base64url')
+    );
   }
 }
