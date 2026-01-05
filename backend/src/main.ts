@@ -20,7 +20,7 @@ async function bootstrap() {
     app.useGlobalPipes(new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
-      transform: true,
+      transform: false, // CRITICAL: must be false for Telegram initData HMAC signature
     }));
 
     // Set global prefix for API routes
