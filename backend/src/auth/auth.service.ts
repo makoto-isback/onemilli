@@ -31,14 +31,22 @@ export class AuthService {
 
     this.logger.log('✅ INIT_DATA_EXISTS: initData received (length: ' + initData.length + ')');
 
-    this.logger.log('🔐 Step 1: Verifying Telegram WebApp signature');
-    const valid = this.verifyTelegramInitData(initData);
-    if (!valid) {
-      this.logger.error('❌ INVALID_SIGNATURE: Telegram WebApp signature verification failed');
-      throw new UnauthorizedException('Invalid Telegram signature');
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (!botToken) {
+      this.logger.error('❌ BOT_TOKEN_NOT_SET: TELEGRAM_BOT_TOKEN environment variable not configured');
+      throw new UnauthorizedException('Server misconfigured');
     }
 
-    this.logger.log('✅ TELEGRAM WEBAPP SIGNATURE VERIFIED');
+    this.logger.log('✅ BOT_TOKEN_EXISTS: Telegram bot token is configured');
+
+    this.logger.log('🔐 Step 1: Verifying Telegram initData hash');
+    const isValid = this.verifyTelegramInitData(initData, botToken);
+    if (!isValid) {
+      this.logger.error('❌ INVALID_HASH: Telegram initData hash verification failed');
+      throw new UnauthorizedException('Invalid Telegram initData');
+    }
+
+    this.logger.log('✅ TELEGRAM HASH VERIFIED');
 
     this.logger.log('📝 Step 2: Parsing user data');
     // Parse user data
@@ -110,34 +118,37 @@ export class AuthService {
     }
   }
 
-  private verifyTelegramInitData(initData: string): boolean {
+  private verifyTelegramInitData(initData: string, botToken: string): boolean {
     const params = new URLSearchParams(initData);
 
-    const signature = params.get('signature');
-    if (!signature) return false;
+    const hash = params.get('hash');
+    if (!hash) {
+      this.logger.error('❌ Missing hash in initData');
+      return false;
+    }
 
-    params.delete('signature');
     params.delete('hash');
 
     const dataCheckString = Array.from(params.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([k, v]) => `${k}=${v}`)
+      .map(([key, value]) => `${key}=${value}`)
       .join('\n');
 
-    const publicKey = Buffer.from(
-      'MCowBQYDK2VwAyEA1x9kYlR5cYs3sU8Nf+v1tZrJv9Qm0bFzJjJ0YwY=',
-      'base64'
-    );
+    const secretKey = crypto
+      .createHash('sha256')
+      .update(botToken)
+      .digest();
 
-    return crypto.verify(
-      null,
-      Buffer.from(dataCheckString),
-      {
-        key: publicKey,
-        format: 'der',
-        type: 'spki',
-      },
-      Buffer.from(signature, 'base64url')
-    );
+    const calculatedHash = crypto
+      .createHmac('sha256', secretKey)
+      .update(dataCheckString)
+      .digest('hex');
+
+    this.logger.log('🔐 Telegram hash check:');
+    this.logger.log(`Received hash:   ${hash}`);
+    this.logger.log(`Calculated hash: ${calculatedHash}`);
+    this.logger.log(`Match: ${calculatedHash === hash}`);
+
+    return calculatedHash === hash;
   }
 }
