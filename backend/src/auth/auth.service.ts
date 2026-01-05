@@ -131,8 +131,9 @@ export class AuthService {
       return false;
     }
 
-    // Remove hash field
+    // IMPORTANT: remove BOTH hash and signature
     params.delete('hash');
+    params.delete('signature');
 
     // Sort remaining keys alphabetically and build key=value pairs joined with \n
     const dataCheckString = Array.from(params.entries())
